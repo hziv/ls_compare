@@ -9,7 +9,7 @@ Directory content compare tool.
 import argparse
 import logging
 from typing import Union, List
-from os.path import isdir, isfile, split, sep
+from os.path import isdir, isfile, splitext, split, join, sep
 
 from tools import ProgressBar, Config
 
@@ -36,7 +36,7 @@ DEFAULT_CFG = \
     f"############################\n" \
     f"# use slash (/) or single back-slash (\\) as path separators.\n" \
     f"\n" \
-    f"default_destination_path = .\\compare_results.csv\n" \
+    f"default_destination_path = .\n" \
     f"\n" \
     f"##########################\n" \
     f"# further configurations #\n" \
@@ -170,7 +170,6 @@ class Comparer:
                                             start_strings: Union[None, str, List[str]] = None,
                                             end_strings: Union[None, str, List[str]] = None) -> bool:
         assert isinstance(line, str)
-        # logging.debug(f"evaluating line:\n{line}\nwhether starts with [{start_strings}] or ends with [{end_strings}]")
         if start_strings is None:
             start_strings = []  # default skip checking
         if isinstance(start_strings, str):
@@ -203,6 +202,25 @@ class Comparer:
                 file_content[folder_path].append(file_name)
         return file_content
 
+    @staticmethod
+    def find_mismatched_left(left: dict, right: dict) -> List[str]:
+        assert isinstance(left, dict)
+        assert isinstance(right, dict)
+        mismatched = []
+        progress_bar = ProgressBar('comparing', len(left) * len(right))
+        for left_key in left.keys():
+            for right_key in right.keys():
+                if left_key.lstrip('/').lower() == right_key.lstrip('/').lower():  # case insensitive
+                    left_filenames = left[left_key]
+                    right_filenames = right[right_key]
+                    for left_filename in left_filenames:
+                        if left_filename not in right_filenames:
+                            mismatched.append(f"{left_key.lstrip('/')}/{left_filename.lstrip('/')}")
+                progress_bar.next()
+        progress_bar.finish()
+        logging.debug(f"found {len(mismatched)} files")
+        return mismatched
+
     def compare(self):
         """
         Main program.
@@ -217,12 +235,15 @@ class Comparer:
             p.next()
         p.finish()
         # compare
-        # TODO: continue here
-        dict_struct = list()
-        p = ProgressBar('compare', len(dict_struct))
-        p.next()
+        left_mismatched = self.find_mismatched_left(files_contents[0], files_contents[1])
+        right_mismatched = self.find_mismatched_left(files_contents[1], files_contents[0])
         # write results
-        p = ProgressBar('write', 1)
+        p = ProgressBar('write', 2)
+        with open(join(self.dest, f"missing_{splitext(split(self.paths[0])[1])[0]}.txt"), 'wt') as f:
+            f.writelines(left_mismatched)
+        p.next()
+        with open(join(self.dest, f"missing_{splitext(split(self.paths[1])[1])[0]}.txt"), 'wt') as f:
+            f.writelines(right_mismatched)
         p.finish()
 
 
@@ -256,8 +277,8 @@ class ArgumentsAndConfigProcessing:
         assert isinstance(dest, str)
         if dest == '':  # get default from config
             dest = config['default_destination_path']
-        if isdir(dest):
-            msg = f"dest argument {dest} pointing to a folder rather than a file"
+        if isfile(dest):
+            msg = f"dest argument {dest} pointing to a file rather than a folder"
             logging.error(msg)
             raise msg
         self.dest = dest
