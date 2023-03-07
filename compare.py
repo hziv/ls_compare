@@ -215,7 +215,7 @@ class Comparer:
                     right_filenames = right[right_key]
                     for left_filename in left_filenames:
                         if left_filename not in right_filenames:
-                            mismatched.append(f"{left_key.lstrip('/')}/{left_filename.lstrip('/')}")
+                            mismatched.append(f"{left_key.lstrip('/')}/{left_filename.lstrip('/')}\n")
                 progress_bar.next()
         progress_bar.finish()
         logging.debug(f"found {len(mismatched)} files")
