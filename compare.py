@@ -199,6 +199,11 @@ class Comparer:
                     file_content[folder_path] = list()  # create folder path key in file_content
             elif not self.does_line_start_or_end_with_strings(line, start_strings='total'):
                 file_name = line.lstrip('/').rstrip('/').split(' ')[-1]
+                # file_size = 0
+                # try:
+                #     file_size = int(line.lstrip('/').rstrip('/').split(' ')[4])
+                # except ValueError:
+                #     logging.warning(f"unable to parse file size from line: {line}")
                 file_content[folder_path].append(file_name)
         return file_content
 
@@ -208,17 +213,18 @@ class Comparer:
         assert isinstance(right, dict)
         mismatched = []
         progress_bar = ProgressBar('comparing', len(left) * len(right))
-        for left_key in left.keys():
-            for right_key in right.keys():
+        for left_key in left.keys():  # left directories
+            for right_key in right.keys():  # right directories
                 if left_key.lstrip('/').lower() == right_key.lstrip('/').lower():  # case insensitive
                     left_filenames = left[left_key]
                     right_filenames = right[right_key]
                     for left_filename in left_filenames:
                         if left_filename not in right_filenames:
                             mismatched.append(f"{left_key.lstrip('/')}/{left_filename.lstrip('/')}\n")
+                        # TODO: compare file sizes here
                 progress_bar.next()
         progress_bar.finish()
-        logging.debug(f"found {len(mismatched)} files")
+        logging.info(f"found {len(mismatched)} files")
         return mismatched
 
     def compare(self):
@@ -226,6 +232,8 @@ class Comparer:
         Main program.
         """
         files_lines = self.read_files(self.paths)
+        left_mismatched = list()
+        right_mismatched = list()
         # parse files
         p = ProgressBar('parse', len(files_lines))
         len_files = len(files_lines)
@@ -235,8 +243,15 @@ class Comparer:
             p.next()
         p.finish()
         # compare
-        left_mismatched = self.find_mismatched_left(files_contents[0], files_contents[1])
-        right_mismatched = self.find_mismatched_left(files_contents[1], files_contents[0])
+        left_mismatched_lines = self.find_mismatched_left(files_contents[0], files_contents[1])
+        right_mismatched_lines = self.find_mismatched_left(files_contents[1], files_contents[0])
+        # clean `d` directory lines - request by Phil
+        for left_mismatched_line in left_mismatched_lines:
+            if ~left_mismatched_line.lower().startswith('d'):
+                left_mismatched.append(left_mismatched_line)
+        for right_mismatched_line in right_mismatched_lines:
+            if ~right_mismatched_line.lower().startswith('d'):
+                right_mismatched.append(right_mismatched_line)
         # write results
         p = ProgressBar('write', 2)
         with open(join(self.dest, f"missing_{splitext(split(self.paths[0])[1])[0]}.txt"), 'wt') as f:
